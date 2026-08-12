@@ -1,0 +1,6 @@
+{
+  "name": "PALM",
+  "description": "Personal Assistant & Lifestyle Manager - Digital Chief of Staff with dynamic modules, household finance, vehicle hub, subscription tracking, and digital vault.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
