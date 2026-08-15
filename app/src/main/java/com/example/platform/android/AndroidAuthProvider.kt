@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.util.Log
 import android.widget.Toast
+import com.example.BuildConfig
 import com.example.auth.FirebaseAuthManager
 import com.example.platform.common.AuthProvider
 
@@ -37,9 +38,14 @@ class AndroidAuthProvider(
         onError: (String) -> Unit
     ) {
         try {
+            val clientId = try {
+                BuildConfig.GOOGLE_WEB_CLIENT_ID.takeIf { !it.contains("your_google_web_client_id") } ?: ""
+            } catch (e: Throwable) { "" }
+
             FirebaseAuthManager.signInWithGoogle(
                 context = context,
                 activity = activity,
+                webClientId = clientId,
                 onSuccess = onSuccess,
                 onError = onError
             )

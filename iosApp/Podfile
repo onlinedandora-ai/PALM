@@ -1,0 +1,11 @@
+# CocoaPods dependencies for PALM iOS app
+platform :ios, '15.0'
+use_frameworks!
+
+target 'iosApp' do
+  # Firebase Authentication SDK
+  pod 'FirebaseAuth'
+
+  # Google Sign-In for iOS
+  pod 'GoogleSignIn'
+end

@@ -7,8 +7,8 @@
  * ║  and is written in Swift, not Kotlin.                        ║
  * ╚══════════════════════════════════════════════════════════════╝
  *
- * File: IosAuthProvider.swift  (would reside in the iOS Xcode project)
- * Conforms to: AuthProviderProtocol  (Swift equivalent of AuthProvider.kt)
+ * File: iosApp/iosApp/Platform/IosAuthProvider.swift
+ * Conforms to: iosApp/iosApp/Platform/AuthProviderProtocol.swift
  *
  * ──────────────────────────────────────────────────────────────
  * GOOGLE SIGN-IN on iOS

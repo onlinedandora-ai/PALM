@@ -148,18 +148,7 @@ class PalmRepository(private val dao: PalmDao) {
 
         val currentBudgets = dao.getAllBudgets().first()
         if (currentBudgets.isEmpty()) {
-            dao.insertBudgets(
-                listOf(
-                    BudgetEntity(category = "Groceries", limitAmount = 15000.0, spentAmount = 12000.0),
-                    BudgetEntity(category = "Utilities", limitAmount = 4500.0, spentAmount = 4500.0),
-                    BudgetEntity(category = "Subscriptions", limitAmount = 3000.0, spentAmount = 1200.0),
-                    BudgetEntity(category = "Dining", limitAmount = 5000.0, spentAmount = 3100.0),
-                    BudgetEntity(category = "Maintenance", limitAmount = 8000.0, spentAmount = 2400.0)
-                )
-            )
-            dao.insertExpense(ExpenseEntity(title = "Reliance Smart Groceries", category = "Groceries", amount = 2400.00, date = "Oct 12"))
-            dao.insertExpense(ExpenseEntity(title = "Electricity Monthly Bill", category = "Utilities", amount = 2100.00, date = "Oct 10"))
-            dao.insertExpense(ExpenseEntity(title = "Municipal Water Supply", category = "Utilities", amount = 2400.00, date = "Oct 08"))
+            populateAllMasterUseCases()
         }
 
         val currentVehicles = dao.getAllVehicles().first()
@@ -282,6 +271,31 @@ class PalmRepository(private val dao: PalmDao) {
         dao.cancelSubscription(id)
     }
 
+    suspend fun addSubscription(name: String, cost: Double, cycle: String, logoIcon: String = "sub") {
+        dao.insertSubscriptions(
+            listOf(
+                SubscriptionEntity(
+                    name = name,
+                    cost = cost,
+                    cycle = cycle,
+                    renewalDate = "In 30 days",
+                    daysLeft = 30,
+                    logoIcon = logoIcon
+                )
+            )
+        )
+    }
+
+    suspend fun addOrUpdateBudget(category: String, limitAmount: Double) {
+        val currentBudgets = dao.getAllBudgets().first()
+        val existing = currentBudgets.find { it.category.equals(category, ignoreCase = true) }
+        if (existing != null) {
+            dao.updateBudget(existing.copy(limitAmount = limitAmount))
+        } else {
+            dao.insertBudgets(listOf(BudgetEntity(category = category, limitAmount = limitAmount, spentAmount = 0.0)))
+        }
+    }
+
     // Vault actions
     suspend fun addVaultDocument(title: String, category: String) {
         dao.insertVaultDoc(
@@ -310,5 +324,111 @@ class PalmRepository(private val dao: PalmDao) {
         dao.clearSubscriptions()
         dao.clearVault()
         dao.clearPasswords()
+    }
+
+    suspend fun populateAllMasterUseCases() {
+        val masterBudgets = listOf(
+            BudgetEntity(category = "Subscriptions (Digital & Media)", limitAmount = 5000.0, spentAmount = 2496.0),
+            BudgetEntity(category = "Insurance Policies", limitAmount = 30000.0, spentAmount = 25000.0),
+            BudgetEntity(category = "Household Operations & Utilities", limitAmount = 20000.0, spentAmount = 14500.0),
+            BudgetEntity(category = "Financial & Asset Management", limitAmount = 45000.0, spentAmount = 43500.0),
+            BudgetEntity(category = "Health & Education", limitAmount = 15000.0, spentAmount = 11000.0),
+            BudgetEntity(category = "Leisure, Personal & Lifestyle", limitAmount = 10000.0, spentAmount = 6500.0),
+            BudgetEntity(category = "Childcare & Dependent Care", limitAmount = 15000.0, spentAmount = 11500.0),
+            BudgetEntity(category = "Pet Care & Expenses", limitAmount = 6000.0, spentAmount = 3800.0),
+            BudgetEntity(category = "Smart Home, Security & Tech", limitAmount = 8000.0, spentAmount = 4200.0),
+            BudgetEntity(category = "Debt & Loan Obligations", limitAmount = 25000.0, spentAmount = 22500.0),
+            BudgetEntity(category = "Remote Work & Professional", limitAmount = 7000.0, spentAmount = 4500.0),
+            BudgetEntity(category = "Apparel, Wardrobe & Textiles", limitAmount = 6000.0, spentAmount = 3600.0),
+            BudgetEntity(category = "Gifting, Festivities & Giving", limitAmount = 10000.0, spentAmount = 5000.0),
+            BudgetEntity(category = "Banking, Tax & Legal Admin", limitAmount = 6000.0, spentAmount = 3500.0),
+            BudgetEntity(category = "Elderly Care & Senior Health", limitAmount = 20000.0, spentAmount = 12000.0),
+            BudgetEntity(category = "Seasonal & Outdoor Maintenance", limitAmount = 5000.0, spentAmount = 3000.0),
+            BudgetEntity(category = "Contingency & Emergency Reserves", limitAmount = 15000.0, spentAmount = 10000.0)
+        )
+        dao.insertBudgets(masterBudgets)
+
+        val masterExpenses = listOf(
+            // 1. Digital Subscriptions & Media
+            ExpenseEntity(title = "Netflix 4K Premium", category = "Subscriptions (Digital & Media)", amount = 649.00, date = "Oct 12"),
+            ExpenseEntity(title = "Spotify Family Plan", category = "Subscriptions (Digital & Media)", amount = 179.00, date = "Oct 10"),
+            ExpenseEntity(title = "Google One 2TB Cloud Storage", category = "Subscriptions (Digital & Media)", amount = 219.00, date = "Oct 08"),
+            ExpenseEntity(title = "Duolingo Super Annual", category = "Subscriptions (Digital & Media)", amount = 399.00, date = "Oct 05"),
+            ExpenseEntity(title = "PlayStation Plus Deluxe", category = "Subscriptions (Digital & Media)", amount = 499.00, date = "Oct 02"),
+            
+            // 2. Insurances
+            ExpenseEntity(title = "Family Health Floater Cover", category = "Insurance Policies", amount = 15000.00, date = "Oct 01"),
+            ExpenseEntity(title = "Term Life Insurance Policy", category = "Insurance Policies", amount = 10000.00, date = "Oct 01"),
+            
+            // 3. Household Operations & Utilities
+            ExpenseEntity(title = "Reliance Smart Pantry & Produce", category = "Household Operations & Utilities", amount = 6500.00, date = "Oct 12"),
+            ExpenseEntity(title = "Housekeeper & Cook Salary", category = "Household Operations & Utilities", amount = 8000.00, date = "Oct 01"),
+            ExpenseEntity(title = "Electricity & Fiber Internet", category = "Household Operations & Utilities", amount = 3500.00, date = "Oct 05"),
+
+            // 4. Financial & Asset Management
+            ExpenseEntity(title = "Apartment Rent Payment", category = "Financial & Asset Management", amount = 35000.00, date = "Oct 01"),
+            ExpenseEntity(title = "Fuel & FASTag Toll Pass", category = "Financial & Asset Management", amount = 4500.00, date = "Oct 09"),
+            ExpenseEntity(title = "Mutual Fund Nifty Index SIP", category = "Financial & Asset Management", amount = 4000.00, date = "Oct 05"),
+
+            // 5. Health & Education
+            ExpenseEntity(title = "School Tuition & Books", category = "Health & Education", amount = 8500.00, date = "Oct 02"),
+            ExpenseEntity(title = "Doctor Checkup & Medicines", category = "Health & Education", amount = 2500.00, date = "Oct 07"),
+
+            // 6. Leisure & Lifestyle
+            ExpenseEntity(title = "Weekend Dining & UberEats", category = "Leisure, Personal & Lifestyle", amount = 3800.00, date = "Oct 11"),
+            ExpenseEntity(title = "Salon & Skincare Grooming", category = "Leisure, Personal & Lifestyle", amount = 2700.00, date = "Oct 08"),
+
+            // 7. Childcare
+            ExpenseEntity(title = "Daycare Center Fee", category = "Childcare & Dependent Care", amount = 8000.00, date = "Oct 01"),
+            ExpenseEntity(title = "Diapers & Baby Formula", category = "Childcare & Dependent Care", amount = 3500.00, date = "Oct 06"),
+
+            // 8. Pets
+            ExpenseEntity(title = "Royal Canin Pet Food & Treats", category = "Pet Care & Expenses", amount = 2500.00, date = "Oct 04"),
+            ExpenseEntity(title = "Annual Vet Vaccination", category = "Pet Care & Expenses", amount = 1300.00, date = "Oct 09"),
+
+            // 9. Smart Home & Tech
+            ExpenseEntity(title = "Ring Protect Security Plan", category = "Smart Home, Security & Tech", amount = 1200.00, date = "Oct 03"),
+            ExpenseEntity(title = "UPS Battery Backup & Charger", category = "Smart Home, Security & Tech", amount = 3000.00, date = "Oct 10"),
+
+            // 10. Debt & Loans
+            ExpenseEntity(title = "Chase Credit Card Statement", category = "Debt & Loan Obligations", amount = 15000.00, date = "Oct 02"),
+            ExpenseEntity(title = "Student Loan Monthly EMI", category = "Debt & Loan Obligations", amount = 7500.00, date = "Oct 04"),
+
+            // 11. Remote Work & Professional
+            ExpenseEntity(title = "Adobe Creative Cloud & Notion", category = "Remote Work & Professional", amount = 2500.00, date = "Oct 05"),
+            ExpenseEntity(title = "LinkedIn Premium Renewal", category = "Remote Work & Professional", amount = 2000.00, date = "Oct 07"),
+
+            // 12. Wardrobe & Textiles
+            ExpenseEntity(title = "Workwear Apparel & Dry Cleaning", category = "Apparel, Wardrobe & Textiles", amount = 3600.00, date = "Oct 09"),
+
+            // 13. Gifting & Giving
+            ExpenseEntity(title = "Festival Holiday Sweets & Tithes", category = "Gifting, Festivities & Giving", amount = 5000.00, date = "Oct 10"),
+
+            // 14. Banking, Tax & Legal
+            ExpenseEntity(title = "CPA Tax Prep & TurboTax", category = "Banking, Tax & Legal Admin", amount = 3500.00, date = "Oct 06"),
+
+            // 15. Elderly Care
+            ExpenseEntity(title = "Home Caregiver & Physical Therapy", category = "Elderly Care & Senior Health", amount = 12000.00, date = "Oct 01"),
+
+            // 16. Seasonal Prep
+            ExpenseEntity(title = "Quarterly Lawn & Pest Control", category = "Seasonal & Outdoor Maintenance", amount = 3000.00, date = "Oct 04"),
+
+            // 17. Emergency Reserves
+            ExpenseEntity(title = "Liquid Fund Emergency Reserve", category = "Contingency & Emergency Reserves", amount = 10000.00, date = "Oct 01")
+        )
+        masterExpenses.forEach { dao.insertExpense(it) }
+
+        val masterSubscriptions = listOf(
+            SubscriptionEntity(name = "Car Insurance Renewal", cost = 52000.00, cycle = "Annual", renewalDate = "5 days", daysLeft = 5, logoIcon = "car"),
+            SubscriptionEntity(name = "Netflix 4K Premium", cost = 649.00, cycle = "Monthly", renewalDate = "Next month", daysLeft = 14, logoIcon = "netflix"),
+            SubscriptionEntity(name = "Spotify Family Plan", cost = 179.00, cycle = "Monthly", renewalDate = "In 18 days", daysLeft = 18, logoIcon = "spotify"),
+            SubscriptionEntity(name = "iCloud 2TB Storage", cost = 219.00, cycle = "Monthly", renewalDate = "In 22 days", daysLeft = 22, logoIcon = "icloud"),
+            SubscriptionEntity(name = "ChatGPT Plus AI", cost = 1999.00, cycle = "Monthly", renewalDate = "In 28 days", daysLeft = 28, logoIcon = "chatgpt"),
+            SubscriptionEntity(name = "Ring Protect Security", cost = 1200.00, cycle = "Monthly", renewalDate = "In 10 days", daysLeft = 10, logoIcon = "sub"),
+            SubscriptionEntity(name = "Adobe Creative Cloud", cost = 2500.00, cycle = "Monthly", renewalDate = "In 15 days", daysLeft = 15, logoIcon = "sub"),
+            SubscriptionEntity(name = "PlayStation Plus Deluxe", cost = 4999.00, cycle = "Annual", renewalDate = "In 45 days", daysLeft = 45, logoIcon = "sub"),
+            SubscriptionEntity(name = "BarkBox Pet Subscription", cost = 1500.00, cycle = "Monthly", renewalDate = "In 12 days", daysLeft = 12, logoIcon = "sub")
+        )
+        dao.insertSubscriptions(masterSubscriptions)
     }
 }

@@ -1,12 +1,12 @@
 package com.example.ui.screens.modules
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -26,7 +26,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -34,6 +34,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.database.BudgetEntity
 import com.example.data.database.ExpenseEntity
+import com.example.data.domain.MasterChecklistCatalog
+import com.example.data.domain.MasterChecklistCategory
+import com.example.data.domain.MasterChecklistItem
 import com.example.ui.PalmViewModel
 import com.example.ui.theme.*
 
@@ -43,18 +46,26 @@ fun HouseholdFinanceScreen(viewModel: PalmViewModel, onBack: () -> Unit) {
     val budgets by viewModel.budgets.collectAsState()
     val expenses by viewModel.expenses.collectAsState()
 
+    var selectedTab by remember { mutableStateOf(0) } // 0: Finance Dashboard, 1: Master Checklist Explorer
+
     var showAddExpenseBottomSheet by remember { mutableStateOf(false) }
     var newExpenseTitle by remember { mutableStateOf("") }
-    var newExpenseCategory by remember { mutableStateOf("Groceries") }
+    var newExpenseCategory by remember { mutableStateOf("Groceries & Essentials") }
     var newExpenseAmount by remember { mutableStateOf("") }
     var selectedCategoryFilter by remember { mutableStateOf("All") }
+
+    // Master Checklist state
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedFrequencyFilter by remember { mutableStateOf("All") }
 
     val totalSpent = budgets.sumOf { it.spentAmount }
     val totalLimit = budgets.sumOf { it.limitAmount }
     val remaining = (totalLimit - totalSpent).coerceAtLeast(0.0)
 
+    val masterCategories = remember { MasterChecklistCatalog.getAllCategories() }
+
     val categories = remember(budgets) {
-        listOf("All") + budgets.map { it.category }
+        listOf("All") + (budgets.map { it.category } + masterCategories.map { it.name }).distinct()
     }
 
     val filteredExpenses = remember(expenses, selectedCategoryFilter) {
@@ -81,11 +92,11 @@ fun HouseholdFinanceScreen(viewModel: PalmViewModel, onBack: () -> Unit) {
                 .background(PalmBackground)
                 .padding(innerPadding)
         ) {
-            // Header Bar
+            // Top Navigation Bar
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onBack) {
@@ -96,13 +107,13 @@ fun HouseholdFinanceScreen(viewModel: PalmViewModel, onBack: () -> Unit) {
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Household Finance Dashboard",
-                        fontSize = 18.sp,
+                        text = "Household Finance & Master Checklist",
+                        fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
                         color = PalmNavy
                     )
                     Text(
-                        text = "Monthly Budget Tracking & Spending Insights",
+                        text = "16 Master Expense & Subscription Categories",
                         fontSize = 11.sp,
                         color = PalmLineGrey
                     )
@@ -113,42 +124,240 @@ fun HouseholdFinanceScreen(viewModel: PalmViewModel, onBack: () -> Unit) {
                     shape = RoundedCornerShape(20.dp)
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(Icons.Default.Lock, contentDescription = "Encrypted", tint = PalmNavy, modifier = Modifier.size(12.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Encrypted", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = PalmNavy)
+                        Text("AES-256", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = PalmNavy)
                     }
                 }
             }
 
-            LazyColumn(
-                contentPadding = PaddingValues(bottom = 80.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp)
+            // Tab Selector (Dashboard vs Master Checklist)
+            TabRow(
+                selectedTabIndex = selectedTab,
+                containerColor = PalmWhite,
+                contentColor = PalmNavy,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                // 1. Overall Spending Overview Card
-                item {
-                    SpendingOverviewCard(
-                        totalSpent = totalSpent,
-                        totalLimit = totalLimit,
-                        remaining = remaining
-                    )
-                }
+                Tab(
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 },
+                    text = { Text("Active Budgets", fontSize = 13.sp, fontWeight = FontWeight.Bold) },
+                    icon = { Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                )
+                Tab(
+                    selected = selectedTab == 1,
+                    onClick = { selectedTab = 1 },
+                    text = { Text("Master Checklist (16)", fontSize = 13.sp, fontWeight = FontWeight.Bold) },
+                    icon = { Icon(Icons.Default.Checklist, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                )
+            }
 
-                // 2. Expense Visualization Chart Card
-                item {
-                    ExpenseVisualizationChartCard(budgets = budgets)
-                }
+            Spacer(modifier = Modifier.height(10.dp))
 
-                // 3. Category Filter Chips
-                item {
-                    Column {
+            if (selectedTab == 0) {
+                // TAB 0: Active Budgets & Finance Dashboard
+                LazyColumn(
+                    contentPadding = PaddingValues(bottom = 80.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp)
+                ) {
+                    // Overall Spending Overview Card
+                    item {
+                        SpendingOverviewCard(
+                            totalSpent = totalSpent,
+                            totalLimit = totalLimit,
+                            remaining = remaining
+                        )
+                    }
+
+                    // Expense Visualization Chart Card
+                    item {
+                        ExpenseVisualizationChartCard(budgets = budgets)
+                    }
+
+                    // Quick Seed Master Template Action
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = PalmNavy.copy(alpha = 0.04f)),
+                            shape = RoundedCornerShape(12.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, PalmNavy.copy(alpha = 0.15f))
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "17 Master Household Expense Categories",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = PalmNavy
+                                    )
+                                    Text(
+                                        text = "Populate & track budgets across all 17 master categories.",
+                                        fontSize = 11.sp,
+                                        color = PalmLineGrey
+                                    )
+                                }
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    OutlinedButton(
+                                        onClick = { viewModel.seedAllMasterUseCases() },
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text("Seed All (17)", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                    Button(
+                                        onClick = { selectedTab = 1 },
+                                        colors = ButtonDefaults.buttonColors(containerColor = PalmNavy),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text("Explore", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Category Filter Chips
+                    item {
+                        Column {
+                            Text(
+                                text = "MONTHLY BUDGET TRACKING",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = PalmLineGrey,
+                                letterSpacing = 1.sp
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(categories) { category ->
+                                    val isSelected = category == selectedCategoryFilter
+                                    FilterChip(
+                                        selected = isSelected,
+                                        onClick = { selectedCategoryFilter = category },
+                                        label = { Text(category, fontSize = 12.sp) },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = PalmNavy,
+                                            selectedLabelColor = PalmWhite
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Budget Category Cards
+                    items(budgets) { budget ->
+                        if (selectedCategoryFilter == "All" || budget.category.equals(selectedCategoryFilter, ignoreCase = true)) {
+                            BudgetTrackingCard(budget = budget)
+                        }
+                    }
+
+                    // Recent Transactions Log Section
+                    item {
+                        Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "MONTHLY BUDGET TRACKING",
+                            text = "RECENT EXPENSES (${filteredExpenses.size})",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = PalmLineGrey,
+                            letterSpacing = 1.sp
+                        )
+                    }
+
+                    if (filteredExpenses.isEmpty()) {
+                        item {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = PalmWhite),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(24.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("No expenses recorded yet for this category.", fontSize = 13.sp, color = PalmLineGrey)
+                                }
+                            }
+                        }
+                    } else {
+                        items(filteredExpenses) { expense ->
+                            ExpenseItemRow(expense = expense)
+                        }
+                    }
+                }
+            } else {
+                // TAB 1: Master Checklist (16 Categories & Sub-items Explorer)
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp)
+                ) {
+                    // Search Bar
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("Search 16 categories, e.g. Netflix, Daycare, Tax, FASTag...") },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { searchQuery = "" }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Clear")
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(focusedContainerColor = PalmWhite, unfocusedContainerColor = PalmWhite),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Frequency Filter Chips
+                    val frequencies = listOf("All", "Monthly", "Annual", "Occasional", "Seasonal", "Term-wise")
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(frequencies) { freq ->
+                            val isSelected = freq == selectedFrequencyFilter
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { selectedFrequencyFilter = freq },
+                                label = { Text(freq, fontSize = 12.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = PalmNavy,
+                                    selectedLabelColor = PalmWhite
+                                )
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    val searchResults = remember(searchQuery) {
+                        if (searchQuery.isNotBlank()) MasterChecklistCatalog.searchItems(searchQuery) else emptyList()
+                    }
+
+                    if (searchQuery.isNotBlank()) {
+                        // Display Search Results
+                        Text(
+                            text = "SEARCH RESULTS (${searchResults.size})",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = PalmLineGrey,
@@ -157,64 +366,71 @@ fun HouseholdFinanceScreen(viewModel: PalmViewModel, onBack: () -> Unit) {
 
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(categories) { category ->
-                                val isSelected = category == selectedCategoryFilter
-                                FilterChip(
-                                    selected = isSelected,
-                                    onClick = { selectedCategoryFilter = category },
-                                    label = { Text(category, fontSize = 12.sp) },
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = PalmNavy,
-                                        selectedLabelColor = PalmWhite
+                        if (searchResults.isEmpty()) {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = PalmWhite),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(24.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("No matching use-case items found.", fontSize = 13.sp, color = PalmLineGrey)
+                                }
+                            }
+                        } else {
+                            LazyColumn(
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                contentPadding = PaddingValues(bottom = 80.dp)
+                            ) {
+                                items(searchResults) { (cat, item) ->
+                                    MasterChecklistItemCard(
+                                        categoryName = cat.name,
+                                        item = item,
+                                        onAddToBudget = {
+                                            viewModel.addChecklistItemToBudget(item.title, cat.name, item.estimatedAmount)
+                                        },
+                                        onQuickExpense = {
+                                            newExpenseTitle = item.title
+                                            newExpenseCategory = cat.name
+                                            newExpenseAmount = item.estimatedAmount.toInt().toString()
+                                            showAddExpenseBottomSheet = true
+                                        },
+                                        onAddSubscription = {
+                                            viewModel.addChecklistItemToSubscription(item.title, item.estimatedAmount, item.frequency)
+                                        }
                                     )
+                                }
+                            }
+                        }
+                    } else {
+                        // Display 16 Categories
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = PaddingValues(bottom = 80.dp)
+                        ) {
+                            items(masterCategories) { cat ->
+                                MasterCategoryCard(
+                                    category = cat,
+                                    frequencyFilter = selectedFrequencyFilter,
+                                    onAddToBudget = { item ->
+                                        viewModel.addChecklistItemToBudget(item.title, cat.name, item.estimatedAmount)
+                                    },
+                                    onQuickExpense = { item ->
+                                        newExpenseTitle = item.title
+                                        newExpenseCategory = cat.name
+                                        newExpenseAmount = item.estimatedAmount.toInt().toString()
+                                        showAddExpenseBottomSheet = true
+                                    },
+                                    onAddSubscription = { item ->
+                                        viewModel.addChecklistItemToSubscription(item.title, item.estimatedAmount, item.frequency)
+                                    }
                                 )
                             }
                         }
-                    }
-                }
-
-                // 4. Budget Category Cards
-                items(budgets) { budget ->
-                    if (selectedCategoryFilter == "All" || budget.category.equals(selectedCategoryFilter, ignoreCase = true)) {
-                        BudgetTrackingCard(budget = budget)
-                    }
-                }
-
-                // 5. Recent Transactions Log Section
-                item {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "RECENT EXPENSES (${filteredExpenses.size})",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = PalmLineGrey,
-                        letterSpacing = 1.sp
-                    )
-                }
-
-                if (filteredExpenses.isEmpty()) {
-                    item {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = PalmWhite),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(24.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text("No expenses recorded yet.", fontSize = 13.sp, color = PalmLineGrey)
-                            }
-                        }
-                    }
-                } else {
-                    items(filteredExpenses) { expense ->
-                        ExpenseItemRow(expense = expense)
                     }
                 }
             }
@@ -231,7 +447,7 @@ fun HouseholdFinanceScreen(viewModel: PalmViewModel, onBack: () -> Unit) {
                     OutlinedTextField(
                         value = newExpenseTitle,
                         onValueChange = { newExpenseTitle = it },
-                        label = { Text("Expense Title (e.g. Supermarket)") },
+                        label = { Text("Expense Title (e.g. Reliance Smart / Daycare)") },
                         singleLine = true,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -241,7 +457,7 @@ fun HouseholdFinanceScreen(viewModel: PalmViewModel, onBack: () -> Unit) {
                     OutlinedTextField(
                         value = newExpenseCategory,
                         onValueChange = { newExpenseCategory = it },
-                        label = { Text("Category (Groceries, Utilities, etc.)") },
+                        label = { Text("Category (Groceries, Insurance, Utilities, etc.)") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -281,6 +497,235 @@ fun HouseholdFinanceScreen(viewModel: PalmViewModel, onBack: () -> Unit) {
                 }
             }
         )
+    }
+}
+
+// ─── MASTER CHECKLIST CATEGORY CARD ─────────────────────────────────────────
+
+@Composable
+fun MasterCategoryCard(
+    category: MasterChecklistCategory,
+    frequencyFilter: String,
+    onAddToBudget: (MasterChecklistItem) -> Unit,
+    onQuickExpense: (MasterChecklistItem) -> Unit,
+    onAddSubscription: (MasterChecklistItem) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    val filteredItems = remember(category.items, frequencyFilter) {
+        if (frequencyFilter == "All") category.items
+        else category.items.filter { it.frequency.contains(frequencyFilter, ignoreCase = true) }
+    }
+
+    if (filteredItems.isEmpty()) return
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = PalmWhite),
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, PalmCardBorder)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    color = PalmNavy.copy(alpha = 0.08f),
+                    shape = CircleShape,
+                    modifier = Modifier.size(38.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = when (category.iconName) {
+                                "tv" -> Icons.Default.Tv
+                                "shield" -> Icons.Default.Shield
+                                "home" -> Icons.Default.Home
+                                "bank" -> Icons.Default.AccountBalance
+                                "health" -> Icons.Default.LocalHospital
+                                "lifestyle" -> Icons.Default.SelfImprovement
+                                "child" -> Icons.Default.ChildCare
+                                "pets" -> Icons.Default.Pets
+                                "smart_home" -> Icons.Default.Router
+                                "credit_card" -> Icons.Default.CreditCard
+                                "work" -> Icons.Default.Work
+                                "checkroom" -> Icons.Default.Checkroom
+                                "card_giftcard" -> Icons.Default.CardGiftcard
+                                "gavel" -> Icons.Default.Gavel
+                                "accessible" -> Icons.Default.MedicalServices
+                                "build" -> Icons.Default.Build
+                                else -> Icons.Default.Category
+                            },
+                            contentDescription = category.name,
+                            tint = PalmNavy,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "${category.categoryNumber}. ${category.name}",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = PalmNavy
+                    )
+                    Text(
+                        text = "${filteredItems.size} Use-Cases • ${category.defaultFrequency}",
+                        fontSize = 11.sp,
+                        color = PalmLineGrey
+                    )
+                }
+
+                Icon(
+                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = "Toggle",
+                    tint = PalmNavy
+                )
+            }
+
+            AnimatedVisibility(visible = expanded) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    HorizontalDivider(color = PalmCardBorder)
+
+                    filteredItems.forEach { item ->
+                        MasterChecklistItemCard(
+                            categoryName = category.name,
+                            item = item,
+                            onAddToBudget = { onAddToBudget(item) },
+                            onQuickExpense = { onQuickExpense(item) },
+                            onAddSubscription = { onAddSubscription(item) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MasterChecklistItemCard(
+    categoryName: String,
+    item: MasterChecklistItem,
+    onAddToBudget: () -> Unit,
+    onQuickExpense: () -> Unit,
+    onAddSubscription: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = PalmSurfaceLight),
+        shape = RoundedCornerShape(12.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, PalmCardBorder.copy(alpha = 0.5f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = item.title,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = PalmNavy
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Surface(
+                        color = PalmNavy.copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Text(
+                            text = item.frequency,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = PalmNavy,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+
+                Text(
+                    text = "Est. ₹${item.estimatedAmount.toInt()}",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PalmAccentBlue
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = item.description,
+                fontSize = 11.sp,
+                color = PalmLineGrey
+            )
+
+            if (item.examples.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Examples: " + item.examples.take(4).joinToString(", "),
+                    fontSize = 10.sp,
+                    color = PalmNavy.copy(alpha = 0.7f),
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(
+                    onClick = onAddToBudget,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.height(28.dp)
+                ) {
+                    Text("+ Budget", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+
+                Spacer(modifier = Modifier.width(6.dp))
+
+                if (item.defaultType == "Subscription" || item.frequency.contains("Monthly", true)) {
+                    OutlinedButton(
+                        onClick = onAddSubscription,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                        shape = RoundedCornerShape(6.dp),
+                        modifier = Modifier.height(28.dp)
+                    ) {
+                        Text("+ Sub", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                }
+
+                Button(
+                    onClick = onQuickExpense,
+                    colors = ButtonDefaults.buttonColors(containerColor = PalmNavy),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.height(28.dp)
+                ) {
+                    Text("+ Log", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
     }
 }
 
@@ -334,7 +779,7 @@ fun SpendingOverviewCard(
             Spacer(modifier = Modifier.width(20.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Text("OCTOBER BUDGET OVERVIEW", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = PalmLineGrey, letterSpacing = 0.5.sp)
+                Text("MONTHLY BUDGET OVERVIEW", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = PalmLineGrey, letterSpacing = 0.5.sp)
                 Spacer(modifier = Modifier.height(4.dp))
                 Text("Spent: ₹${String.format("%.2f", totalSpent)}", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = PalmWhite)
                 Text("Limit: ₹${String.format("%.2f", totalLimit)}", fontSize = 13.sp, color = PalmWhite.copy(alpha = 0.8f))
@@ -360,7 +805,9 @@ fun ExpenseVisualizationChartCard(budgets: List<BudgetEntity>) {
         PalmAlertAmber,
         PalmSuccessGreen,
         Color(0xFF8E44AD),
-        Color(0xFFE67E22)
+        Color(0xFFE67E22),
+        Color(0xFF00BCD4),
+        Color(0xFFE91E63)
     )
 
     Card(
@@ -381,7 +828,7 @@ fun ExpenseVisualizationChartCard(budgets: List<BudgetEntity>) {
                     Icon(Icons.Default.BarChart, contentDescription = "Chart", tint = PalmAccentBlue)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Expense Category Chart",
+                        text = "Category Budget Breakdown",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = PalmNavy
@@ -396,11 +843,11 @@ fun ExpenseVisualizationChartCard(budgets: List<BudgetEntity>) {
                             shape = RoundedCornerShape(6.dp)
                         ) {
                             Text(
-                                text = "${b.category}: ₹${String.format("%.0f", b.spentAmount)}",
+                                text = "${b.category.take(12)}: ₹${String.format("%.0f", b.spentAmount)}",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = PalmNavy,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
                     }
@@ -413,74 +860,60 @@ fun ExpenseVisualizationChartCard(budgets: List<BudgetEntity>) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(140.dp),
+                        .height(100.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("No category data available.", fontSize = 12.sp, color = PalmLineGrey)
+                    Text("No budgets defined.", fontSize = 12.sp, color = PalmLineGrey)
                 }
             } else {
                 val maxSpent = (budgets.maxOfOrNull { it.spentAmount } ?: 1.0).coerceAtLeast(1.0)
+                val maxBarHeight = 110.dp
 
-                // Canvas Bar Chart
-                Canvas(
+                BoxWithConstraints(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(150.dp)
-                        .pointerInput(budgets) {
-                            detectTapGestures { offset ->
-                                val barWidth = size.width / (budgets.size * 2 - 1)
-                                val index = (offset.x / (barWidth * 2)).toInt()
-                                if (index in budgets.indices) {
-                                    selectedCategoryIndex = index
-                                }
-                            }
-                        }
+                        .height(130.dp)
                 ) {
-                    val barWidthPx = size.width / (budgets.size * 2f - 1f)
-                    val maxBarHeight = size.height - 30.dp.toPx()
+                    val widthPx = constraints.maxWidth.toFloat()
+                    val barWidthPx = (widthPx / (budgets.size * 2f)).coerceIn(16f, 40f)
 
-                    // Draw Horizontal Grid Lines
-                    for (i in 1..3) {
-                        val y = maxBarHeight * (1f - i / 3f)
-                        drawLine(
-                            color = PalmCardBorder,
-                            start = Offset(0f, y),
-                            end = Offset(size.width, y),
-                            strokeWidth = 1.dp.toPx()
-                        )
+                    Canvas(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(maxBarHeight)
+                    ) {
+                        budgets.forEachIndexed { index, budget ->
+                            val barHeight = ((budget.spentAmount / maxSpent) * maxBarHeight.toPx()).toFloat().coerceAtLeast(12.dp.toPx())
+                            val x = index * barWidthPx * 2f + (barWidthPx / 2f)
+                            val y = maxBarHeight.toPx() - barHeight
+
+                            val color = categoryColors.getOrElse(index % categoryColors.size) { PalmAccentBlue }
+                            val isSelected = selectedCategoryIndex == index
+
+                            drawRoundRect(
+                                color = if (isSelected) color else color.copy(alpha = 0.85f),
+                                topLeft = Offset(x, y),
+                                size = Size(barWidthPx, barHeight),
+                                cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx())
+                            )
+                        }
                     }
 
-                    budgets.forEachIndexed { index, budget ->
-                        val barHeight = ((budget.spentAmount / maxSpent) * maxBarHeight).toFloat().coerceAtLeast(12.dp.toPx())
-                        val x = index * barWidthPx * 2f
-                        val y = maxBarHeight - barHeight
-
-                        val color = categoryColors.getOrElse(index) { PalmAccentBlue }
-                        val isSelected = selectedCategoryIndex == index
-
-                        // Bar background
-                        drawRoundRect(
-                            color = if (isSelected) color else color.copy(alpha = 0.85f),
-                            topLeft = Offset(x, y),
-                            size = Size(barWidthPx, barHeight),
-                            cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx())
-                        )
-                    }
+                    Spacer(modifier = Modifier.height(12.dp))
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
-
                 // Chart Legend Labels
-                Row(
+                LazyRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceAround
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    budgets.forEachIndexed { index, budget ->
-                        val color = categoryColors.getOrElse(index) { PalmAccentBlue }
+                    items(budgets.size) { index ->
+                        val budget = budgets[index]
+                        val color = categoryColors.getOrElse(index % categoryColors.size) { PalmAccentBlue }
                         val isSelected = selectedCategoryIndex == index
 
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.clickable { selectedCategoryIndex = index }
                         ) {
                             Box(
@@ -489,9 +922,9 @@ fun ExpenseVisualizationChartCard(budgets: List<BudgetEntity>) {
                                     .clip(CircleShape)
                                     .background(color)
                             )
-                            Spacer(modifier = Modifier.height(2.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = budget.category.take(6),
+                                text = budget.category.take(12),
                                 fontSize = 10.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                 color = if (isSelected) PalmNavy else PalmLineGrey
@@ -598,11 +1031,15 @@ fun ExpenseItemRow(expense: ExpenseEntity) {
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        imageVector = when (expense.category.lowercase()) {
-                            "groceries" -> Icons.Default.ShoppingCart
-                            "utilities" -> Icons.Default.Bolt
-                            "dining" -> Icons.Default.Restaurant
-                            "entertainment" -> Icons.Default.Movie
+                        imageVector = when {
+                            expense.category.lowercase().contains("groceries") -> Icons.Default.ShoppingCart
+                            expense.category.lowercase().contains("utilities") -> Icons.Default.Bolt
+                            expense.category.lowercase().contains("dining") || expense.category.lowercase().contains("food") -> Icons.Default.Restaurant
+                            expense.category.lowercase().contains("subscription") || expense.category.lowercase().contains("media") -> Icons.Default.Tv
+                            expense.category.lowercase().contains("health") || expense.category.lowercase().contains("pharmacy") -> Icons.Default.LocalHospital
+                            expense.category.lowercase().contains("child") || expense.category.lowercase().contains("education") -> Icons.Default.ChildCare
+                            expense.category.lowercase().contains("pet") -> Icons.Default.Pets
+                            expense.category.lowercase().contains("debt") || expense.category.lowercase().contains("loan") -> Icons.Default.CreditCard
                             else -> Icons.Default.Receipt
                         },
                         contentDescription = expense.category,
@@ -637,5 +1074,3 @@ fun ExpenseItemRow(expense: ExpenseEntity) {
         }
     }
 }
-
-

@@ -360,6 +360,44 @@ class PalmViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun addSubscription(name: String, cost: Double, cycle: String = "Monthly", logoIcon: String = "sub") {
+        viewModelScope.launch {
+            repository.addSubscription(name, cost, cycle, logoIcon)
+        }
+    }
+
+    fun addOrUpdateBudget(category: String, limitAmount: Double) {
+        viewModelScope.launch {
+            repository.addOrUpdateBudget(category, limitAmount)
+        }
+    }
+
+    fun seedAllMasterUseCases() {
+        viewModelScope.launch {
+            repository.populateAllMasterUseCases()
+        }
+    }
+
+    fun addChecklistItemToBudget(itemTitle: String, categoryName: String, amount: Double) {
+        viewModelScope.launch {
+            repository.addOrUpdateBudget(categoryName, amount)
+        }
+    }
+
+    fun addChecklistItemToSubscription(title: String, amount: Double, frequency: String) {
+        viewModelScope.launch {
+            val cycle = if (frequency.contains("Annual", ignoreCase = true)) "Annual" else "Monthly"
+            val icon = when {
+                title.contains("Netflix", true) -> "netflix"
+                title.contains("Spotify", true) -> "spotify"
+                title.contains("iCloud", true) || title.contains("Cloud", true) -> "icloud"
+                title.contains("Car", true) || title.contains("Vehicle", true) || title.contains("Auto", true) -> "car"
+                else -> "sub"
+            }
+            repository.addSubscription(title, amount, cycle, icon)
+        }
+    }
+
     fun cancelSubscription(subId: Long) {
         viewModelScope.launch {
             repository.cancelSubscription(subId)
